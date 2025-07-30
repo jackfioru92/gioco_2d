@@ -3,11 +3,12 @@ import 'package:flutter/services.dart';
 import 'components/player.dart';
 import 'components/ground.dart';
 import 'components/platform.dart';
+import 'components/platform_generator.dart';
 
 class PlatformerGame extends FlameGame with HasCollisionDetection {
   late Player player;
   late Ground ground;
-  final List<Platform> platforms = [];
+  late PlatformGenerator platformGenerator;
   final Set<LogicalKeyboardKey> _pressedKeys = <LogicalKeyboardKey>{};
 
   @override
@@ -16,55 +17,16 @@ class PlatformerGame extends FlameGame with HasCollisionDetection {
     ground = Ground();
     add(ground);
 
-    // Crea e aggiungi alcune piattaforme
-    _createPlatforms();
+    // Crea il generatore automatico di piattaforme
+    platformGenerator = PlatformGenerator();
+    add(platformGenerator);
 
     // Crea e aggiungi il player
     player = Player();
     player.position = Vector2(100, size.y - 200); // Posiziona sopra il terreno
     add(player);
-  }
 
-  void _createPlatforms() {
-    // Piattaforma bassa - vicino al terreno per primi salti
-    final platformLow = Platform(
-      position: Vector2(300, size.y - 180),
-      size: Vector2(120, 20),
-    );
-    platforms.add(platformLow);
-    add(platformLow);
-
-    // Piattaforma 1 - a sinistra
-    final platform1 = Platform(
-      position: Vector2(200, size.y - 300),
-      size: Vector2(150, 20),
-    );
-    platforms.add(platform1);
-    add(platform1);
-
-    // Piattaforma 2 - al centro
-    final platform2 = Platform(
-      position: Vector2(400, size.y - 450),
-      size: Vector2(120, 20),
-    );
-    platforms.add(platform2);
-    add(platform2);
-
-    // Piattaforma 3 - a destra
-    final platform3 = Platform(
-      position: Vector2(600, size.y - 350),
-      size: Vector2(140, 20),
-    );
-    platforms.add(platform3);
-    add(platform3);
-
-    // Piattaforma 4 - piccola piattaforma in alto
-    final platform4 = Platform(
-      position: Vector2(300, size.y - 600),
-      size: Vector2(100, 20),
-    );
-    platforms.add(platform4);
-    add(platform4);
+    print("🎮 Gioco caricato con generatore automatico di piattaforme!");
   }
 
   @override
@@ -136,9 +98,11 @@ class PlatformerGame extends FlameGame with HasCollisionDetection {
       stillOnSomething = true;
     }
 
-    // Controlla le piattaforme se non è sul terreno
+    // Controlla le piattaforme generate automaticamente
     if (!stillOnSomething) {
-      for (final platform in platforms) {
+      // Cerca tutte le piattaforme nel gioco
+      final allPlatforms = children.whereType<Platform>();
+      for (final platform in allPlatforms) {
         if (playerBottom >= platform.position.y - 2 &&
             playerBottom <= platform.position.y + 10 &&
             playerLeft < platform.position.x + platform.size.x &&
