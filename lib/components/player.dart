@@ -32,19 +32,86 @@ class Player extends RectangleComponent
   late RectangleHitbox rightSensor;
   late RectangleHitbox topSensor;
   late RectangleHitbox bottomSensor;
+
+  // Animazioni - senza usare flip, per evitare problemi di posizionamento
+  SpriteAnimationComponent? animationRenderer;
+  SpriteAnimation? idleAnimation;
+  SpriteAnimation? runAnimation;
+  SpriteAnimation? jumpAnimation;
+
+  // Stati di animazione
+  String currentState = 'idle';
+  bool facingRight = true;
+  bool useAnimations = false;
   @override
   Future<void> onLoad() async {
-    // Dimensioni del personaggio
-    size = Vector2(50, 80);
+    // Dimensioni del personaggio (64x64 per gli sprite)
+    size = Vector2(64, 64);
 
-    // Colore del personaggio (blu)
-    paint = Paint()..color = const Color(0xFF2196F3);
+    // Prova a caricare le animazioni
+    try {
+      await _loadAnimations();
+      useAnimations = true;
+      // Rendi il rettangolo trasparente quando usiamo gli sprite
+      paint = Paint()..color = const Color(0x00000000);
+      print("✅ Animazioni caricate con successo!");
+    } catch (e) {
+      print(
+        "⚠️ Errore caricamento animazioni: $e - usando rettangolo colorato",
+      );
+      useAnimations = false;
+      // Colore del personaggio (blu) - fallback se gli sprite non si caricano
+      paint = Paint()..color = const Color(0xFF2196F3);
+    }
 
     // Aggiungi l'hitbox principale del player
     add(RectangleHitbox());
 
     // Crea la "gabbia" di sensori per rilevare collisioni direzionali
     _createCollisionCage();
+  }
+
+  Future<void> _loadAnimations() async {
+    // Carica spritesheet idle (2 frame, 64x64)
+    final idleSprite = await game.loadSprite('idle_spritesheet.png');
+    idleAnimation = SpriteAnimation.fromFrameData(
+      idleSprite.image,
+      SpriteAnimationData.sequenced(
+        amount: 2,
+        textureSize: Vector2(64, 64),
+        stepTime: 0.8, // Animazione lenta per idle
+      ),
+    );
+
+    // Carica spritesheet run (3 frame, 64x64)
+    final runSprite = await game.loadSprite('run_spritesheet.png');
+    runAnimation = SpriteAnimation.fromFrameData(
+      runSprite.image,
+      SpriteAnimationData.sequenced(
+        amount: 3,
+        textureSize: Vector2(64, 64),
+        stepTime: 0.15, // Animazione veloce per corsa
+      ),
+    );
+
+    // Carica spritesheet jump (5 frame, 64x64)
+    final jumpSprite = await game.loadSprite('jump_spritesheet.png');
+    jumpAnimation = SpriteAnimation.fromFrameData(
+      jumpSprite.image,
+      SpriteAnimationData.sequenced(
+        amount: 5,
+        textureSize: Vector2(64, 64),
+        stepTime: 0.1, // Animazione veloce per salto
+      ),
+    );
+
+    // Imposta l'animazione iniziale
+    animationRenderer = SpriteAnimationComponent(
+      animation: idleAnimation!,
+      size: size,
+      position: Vector2.zero(),
+    );
+    add(animationRenderer!);
   }
 
   void _createCollisionCage() {
@@ -112,6 +179,18 @@ class Player extends RectangleComponent
     position.x += velocityX * dt;
     position.y += velocityY * dt;
 
+    // Print della posizione del rettangolo trasparente (hitbox principale)
+    if (velocityX != 0) {
+      print(
+        "📦 Rettangolo trasparente (hitbox): x=${position.x.toStringAsFixed(1)}, y=${position.y.toStringAsFixed(1)}",
+      );
+      if (animationRenderer != null) {
+        print(
+          "🎭 SpriteAnimation: x=${animationRenderer!.position.x.toStringAsFixed(1)}, y=${animationRenderer!.position.y.toStringAsFixed(1)}, scale.x=${animationRenderer!.scale.x}",
+        );
+      }
+    }
+
     // Limiti dello schermo (orizzontali)
     if (position.x < 0) {
       position.x = 0;
@@ -122,8 +201,83 @@ class Player extends RectangleComponent
       velocityX = 0;
     }
 
-    // Aggiorna colore in base allo stato
-    _updateColor();
+    // Aggiorna colore in base allo stato (solo se non usiamo animazioni)
+    if (useAnimations) {
+      _updateAnimation();
+    } else {
+      _updateColor();
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    // Non renderizziamo il rettangolo di base se usiamo le animazioni
+    if (!useAnimations) {
+      super.render(canvas);
+    }
+    // Le animazioni vengono renderizzate automaticamente dal SpriteAnimationComponent
+  }
+
+  void _updateAnimation() {
+    if (!useAnimations || animationRenderer == null) return;
+
+    // PRIMA DI TUTTO: sincronizza la posizione dell'animazione con il rettangolo
+    animationRenderer!.position =
+        Vector2.zero(); // Posizione relativa al parent
+
+    String newState = 'idle';
+
+    // Determina lo stato corrente
+    if (!isOnGround) {
+      newState = 'jump';
+    } else if (velocityX != 0) {
+      newState = 'run';
+    } else {
+      newState = 'idle';
+    }
+
+    // Cambia animazione solo se necessario
+    if (newState != currentState) {
+      currentState = newState;
+      print("🔄 Cambio animazione a: $currentState");
+
+      // Imposta la nuova animazione
+      switch (currentState) {
+        case 'idle':
+          animationRenderer!.animation = idleAnimation;
+          break;
+        case 'run':
+          animationRenderer!.animation = runAnimation;
+          break;
+        case 'jump':
+          animationRenderer!.animation = jumpAnimation;
+          break;
+      }
+    }
+
+    // Aggiorna direzione in base al movimento (temporaneamente senza flip)
+    if (velocityX > 0) {
+      if (!facingRight) {
+        print("👉 Cambio direzione: ora guarda a DESTRA");
+      }
+      facingRight = true;
+      animationRenderer!.scale.x = 1; // Niente flip per ora
+    } else if (velocityX < 0) {
+      if (facingRight) {
+        print(
+          "👈 Cambio direzione: ora guarda a SINISTRA (SENZA flip per debug)",
+        );
+      }
+      facingRight = false;
+      animationRenderer!.scale.x = 1; // Niente flip per ora
+    }
+
+    // Debug: stampa posizione dopo l'aggiornamento
+    if (velocityX != 0) {
+      print(
+        "🔄 Dopo aggiornamento - SpriteAnimation: x=${animationRenderer!.position.x.toStringAsFixed(1)}, y=${animationRenderer!.position.y.toStringAsFixed(1)}, scale.x=${animationRenderer!.scale.x}",
+      );
+    }
   }
 
   void _updateColor() {
@@ -235,7 +389,7 @@ class Player extends RectangleComponent
           }
           print("🚫 DESTRA bloccata da piattaforma!");
         } else {
-          // Piattaforma a sinistra del player - blocca movimento a sinistra  
+          // Piattaforma a sinistra del player - blocca movimento a sinistra
           canMoveLeft = false;
           // Respingi il player verso destra se si sta muovendo a sinistra
           if (velocityX < 0) {
@@ -266,7 +420,9 @@ class Player extends RectangleComponent
     }
 
     return true;
-  }  @override
+  }
+
+  @override
   bool onCollisionEnd(PositionComponent other) {
     super.onCollisionEnd(other);
 
